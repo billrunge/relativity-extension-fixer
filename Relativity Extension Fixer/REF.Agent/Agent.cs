@@ -47,15 +47,24 @@ namespace ExtensionFixerAgent
                         List<int> searchResults = RunSourceSearch(proxy, sourceSearchArtifactID);
                         CreatePopTable(workspaceDBContext, jobArtifactID, searchResults, true);
                     }
-                   
 
                     DataTable batch = GetJobBatch(workspaceDBContext, jobArtifactID, 5000);
-                    DataTable updatedBatch = UpdateFilenameExtension(batch);
-                    UpdateJobTable(workspaceDBContext, updatedBatch, jobArtifactID);
-                    UpdateFileTable(workspaceDBContext, jobArtifactID);
+
+                    if (batch is null)
+                    {
+                        UpdateJobStatus(eddsDBContext, agentArtifactID, workspaceArtifactID, jobArtifactID, 4);
+                        CleanQueueTable(eddsDBContext);
+                    }
+                    else
+                    {
+                        UpdateJobStatus(eddsDBContext, agentArtifactID, workspaceArtifactID, jobArtifactID, 2);
+                        DataTable updatedBatch = UpdateFilenameExtension(batch);
+                        UpdateJobTable(workspaceDBContext, updatedBatch, jobArtifactID);
+                        UpdateFileTable(workspaceDBContext, jobArtifactID);
+                    }
                 }
-                
-                
+
+
             }
             catch (System.Exception ex)
             {
@@ -116,7 +125,7 @@ namespace ExtensionFixerAgent
         }
 
         /**
-        * Generate a string with the file header info
+        * 
         */
         public static DataTable GetJobBatch(Relativity.API.IDBContext workspaceDBContext, Int32 jobArtifactID, Int32 batchSize)
         {
@@ -129,7 +138,7 @@ namespace ExtensionFixerAgent
                 
                 SELECT TOP({0}) [FileID] INTO #TempFileIDs FROM [REF_POP_{1}] WHERE [Status] = 0 ORDER BY [FileID] ASC;
 
-                UPDATE REF SET REF.[Status] = 2 FROM [EDDSDBO].[REF_POP_{1}] AS REF
+                UPDATE REF SET REF.[Status] = 1 FROM [EDDSDBO].[REF_POP_{1}] AS REF
                 INNER JOIN #TempFileIDs AS TFI
                 ON REF.FileID = TFI.FileID;
 
@@ -140,8 +149,18 @@ namespace ExtensionFixerAgent
 
                 IF OBJECT_ID('tempdb..#TempFileIDs') IS NOT NULL DROP TABLE #TempFileIDs;", batchSize.ToString(), jobArtifactID.ToString());
 
-            return workspaceDBContext.ExecuteSqlStatementAsDataTable(sql);
+            DataTable jobBatch = workspaceDBContext.ExecuteSqlStatementAsDataTable(sql);
+
+            if (jobBatch.Rows.Count > 0)
+            {
+                return jobBatch;
+            }
+            else
+            {
+                return null;
+            }
         }
+
 
         /**
          * loop through every row in the current batch's data table
@@ -156,6 +175,7 @@ namespace ExtensionFixerAgent
             }
             return currentBatch;
         }
+
 
         public static void CreatePopTable(Relativity.API.IDBContext workspaceDBContext, int jobArtifactID, List<int> searchArtifacts, bool imagesOnly)
         {
@@ -334,6 +354,27 @@ namespace ExtensionFixerAgent
 
         }
 
+        public static void UpdateJobStatus(Relativity.API.IDBContext eddsDBContext, Int32 agentArtifactID, Int32 workspaceArtifactID, Int32 jobArtifactID, Int32 statusCode)
+        {
+            string sql = String.Format(@"                    
+                    UPDATE [EDDS].[eddsdbo].[ExtensionFixerQueue]
+                    SET [Status] = {0}
+                    WHERE [WorkspaceArtifactID] = {1}
+                    AND [JobArtifactID] = {2}
+                    AND [AgentArtifactID] = {3}", statusCode, workspaceArtifactID, jobArtifactID, agentArtifactID);
+
+            eddsDBContext.ExecuteNonQuerySQLStatement(sql);
+        }
+
+        public static void CleanQueueTable(Relativity.API.IDBContext eddsDBContext)
+        {
+            string sql = @"                    
+                    DELETE FROM [EDDS].[eddsdbo].[ExtensionFixerQueue]
+                    WHERE [Status] = 4";
+
+            eddsDBContext.ExecuteNonQuerySQLStatement(sql);
+        }
+
 
         public static List<int> RunSourceSearch(IRSAPIClient workspaceProxy, int searchArtifactID)
         {
@@ -427,10 +468,6 @@ namespace ExtensionFixerAgent
 
             return artifactList;
         }
-
-
-
-
 
         public enum JobStatus
         {
