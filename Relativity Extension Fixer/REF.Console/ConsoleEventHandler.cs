@@ -27,31 +27,39 @@ namespace REF.Console
                 IF NOT EXISTS(SELECT TOP 1 * FROM [ExtensionFixerQueue] WHERE [WorkspaceArtifactID] = @WorkspaceArtifactID AND [JobArtifactID] = @JobArtifactID)
                 BEGIN
                 INSERT INTO [ExtensionFixerQueue] (WorkspaceArtifactID, JobArtifactID, SourceSearchArtifactID, [Status], CreatedOn, LastModifiedOn)
-                Values (@WorkspaceArtifactID, @JobArtifactID, 1042643, 0, GETUTCDATE(),GETUTCDATE())
+                Values (@WorkspaceArtifactID, @JobArtifactID, @SourceSearchArtifactID, 0, GETUTCDATE(),GETUTCDATE())
                 END";
 
         public override kCura.EventHandler.Console GetConsole(kCura.EventHandler.ConsoleEventHandler.PageEvent pageEvent)
         {
             //Construct a console object to build the console appearing in the UI.
-            kCura.EventHandler.Console returnConsole = new kCura.EventHandler.Console();
-            returnConsole.Items = new List<kCura.EventHandler.IConsoleItem>();
-            returnConsole.Title = CONSOLE_TITLE;
+            kCura.EventHandler.Console returnConsole = new kCura.EventHandler.Console
+            {
+                Items = new List<kCura.EventHandler.IConsoleItem>(),
+                Title = CONSOLE_TITLE
+            };
 
             //Construct the submit job button.
-            kCura.EventHandler.ConsoleButton submitJobButton = new kCura.EventHandler.ConsoleButton();
-            submitJobButton.Name = INSERT_JOB_BUTTON_NAME;
-            submitJobButton.DisplayText = INSERT_JOB_DISPLAY_TEXT;
-            submitJobButton.ToolTip = INSERT_JOB_TOOL_TIP;
-            submitJobButton.RaisesPostBack = true;
+            kCura.EventHandler.ConsoleButton submitJobButton = new kCura.EventHandler.ConsoleButton
+            {
+                Name = INSERT_JOB_BUTTON_NAME,
+                DisplayText = INSERT_JOB_DISPLAY_TEXT,
+                ToolTip = INSERT_JOB_TOOL_TIP,
+                RaisesPostBack = true
+            };
 
             //If a job is already in the queue, change the text and disable the button.
             if (pageEvent == PageEvent.PreRender)
             {
-                System.Data.SqlClient.SqlParameter workspaceArtifactIDParam = new System.Data.SqlClient.SqlParameter("@WorkspaceArtifactID", System.Data.SqlDbType.Int);
-                workspaceArtifactIDParam.Value = this.Helper.GetActiveCaseID();
+                System.Data.SqlClient.SqlParameter workspaceArtifactIDParam = new System.Data.SqlClient.SqlParameter("@WorkspaceArtifactID", System.Data.SqlDbType.Int)
+                {
+                    Value = this.Helper.GetActiveCaseID()
+                };
 
-                System.Data.SqlClient.SqlParameter jobArtifactIDParam = new System.Data.SqlClient.SqlParameter("@JobArtifactID", System.Data.SqlDbType.Int);
-                jobArtifactIDParam.Value = this.ActiveArtifact.ArtifactID;
+                System.Data.SqlClient.SqlParameter jobArtifactIDParam = new System.Data.SqlClient.SqlParameter("@JobArtifactID", System.Data.SqlDbType.Int)
+                {
+                    Value = this.ActiveArtifact.ArtifactID
+                };
 
                 int jobCount = this.Helper.GetDBContext(-1).ExecuteSqlStatementAsScalar<Int32>(JOB_EXISTS_QUERY, new System.Data.SqlClient.SqlParameter[] { workspaceArtifactIDParam, jobArtifactIDParam });
 
@@ -81,17 +89,26 @@ namespace REF.Console
             {
                 case INSERT_JOB_BUTTON_NAME:
                     //The user clicked the button for the insert job so add the job to the queue table on the EDDS database.
-                    System.Data.SqlClient.SqlParameter workspaceArtifactIDParam = new System.Data.SqlClient.SqlParameter("@WorkspaceArtifactID", System.Data.SqlDbType.Int);
-                    workspaceArtifactIDParam.Value = this.Helper.GetActiveCaseID();
-                    System.Data.SqlClient.SqlParameter jobArtifactIDParam = new System.Data.SqlClient.SqlParameter("@JobArtifactID", System.Data.SqlDbType.Int);
-                    jobArtifactIDParam.Value = this.ActiveArtifact.ArtifactID;
+                    System.Data.SqlClient.SqlParameter workspaceArtifactIDParam = new System.Data.SqlClient.SqlParameter("@WorkspaceArtifactID", System.Data.SqlDbType.Int)
+                    {
+                        Value = this.Helper.GetActiveCaseID()
+                    };
+                    System.Data.SqlClient.SqlParameter jobArtifactIDParam = new System.Data.SqlClient.SqlParameter("@JobArtifactID", System.Data.SqlDbType.Int)
+                    {
+                        Value = this.ActiveArtifact.ArtifactID
+                    };
+                    System.Data.SqlClient.SqlParameter searchArtifactIDParam = new System.Data.SqlClient.SqlParameter("@SourceSearchArtifactID", System.Data.SqlDbType.Int)
+                    {
+                        Value = this.ActiveArtifact.Fields[SEARCH_FIELD_GUID.ToString()].Value.Value
+
+                    };
 
 
                     //string searchArtifactID = this.ActiveArtifact.Fields.;
 
                     //searchArtifactID = this.ActiveArtifact.
 
-                    this.Helper.GetDBContext(-1).ExecuteNonQuerySQLStatement(INSERT_JOB_QUERY, new System.Data.SqlClient.SqlParameter[] { workspaceArtifactIDParam, jobArtifactIDParam });
+                    this.Helper.GetDBContext(-1).ExecuteNonQuerySQLStatement(INSERT_JOB_QUERY, new System.Data.SqlClient.SqlParameter[] { workspaceArtifactIDParam, jobArtifactIDParam, searchArtifactIDParam });
 
                     break;
             }
